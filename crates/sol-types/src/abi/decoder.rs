@@ -102,7 +102,7 @@ impl AbiDecoderConfig {
     /// is enabled.
     #[inline]
     pub const fn get_strict(&self) -> bool {
-        self.strict || self.validate_allow_trailing_bytes
+        self.strict
     }
 
     /// Returns whether strict validation permits trailing bytes.
