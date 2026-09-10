@@ -150,13 +150,14 @@ impl AbiDecoderConfig {
         self
     }
 
-    /// Enables strict validation of an ABI-encoded prefix, allowing trailing bytes.
+    /// Allows trailing bytes when strict ABI decoding is enabled.
     ///
-    /// This implies [`strict`](Self::strict) and [`validate`](Self::validate), but skips
-    /// the final check that the encoding consumes the entire input. All other checks,
-    /// including canonical offsets, complete zero padding, and token validation, remain
-    /// enabled. This matches Solidity's acceptance of trailing bytes only; it does not
-    /// relax the other checks that Solidity omits.
+    /// This does not enable [`strict`](Self::strict) or [`validate`](Self::validate).
+    /// In strict mode, it skips the final check that the encoding consumes the entire
+    /// input. All other strict checks, including canonical offsets, complete zero padding,
+    /// and token validation, remain enabled. This matches Solidity's acceptance of trailing
+    /// bytes only; it does not relax the other checks that Solidity omits. Without strict
+    /// mode, trailing bytes are already permitted.
     ///
     /// This option permits trailing bytes even when `strict(true)` is also set,
     /// regardless of setter order. Disabling it leaves the other configuration flags
@@ -167,7 +168,7 @@ impl AbiDecoderConfig {
     ///
     /// let mut data = Uint::<8>::abi_encode(&42);
     /// data.extend_from_slice(&[0xaa, 0xbb]);
-    /// let config = AbiDecoderConfig::new().validate_allow_trailing_bytes(true);
+    /// let config = AbiDecoderConfig::new().strict(true).validate_allow_trailing_bytes(true);
     /// assert_eq!(Uint::<8>::abi_decode_with_config(&data, config)?, 42);
     /// # Ok::<(), alloy_sol_types::Error>(())
     /// ```
@@ -1243,8 +1244,8 @@ mod tests {
     #[test]
     fn validate_allow_trailing_bytes_config() {
         let mut config = AbiDecoderConfig::new().validate_allow_trailing_bytes(true);
-        assert!(config.get_validate());
-        assert!(config.get_strict());
+        assert!(!config.get_validate());
+        assert!(!config.get_strict());
         assert!(config.get_validate_allow_trailing_bytes());
 
         config.set_validate_allow_trailing_bytes(false);
@@ -1257,6 +1258,17 @@ mod tests {
         config.set_validate_allow_trailing_bytes(false);
         assert!(config.get_strict());
         assert!(config.get_validate());
+
+        config.set_strict(false);
+        config.set_validate(true);
+        config.set_validate_allow_trailing_bytes(true);
+        assert!(!config.get_strict());
+        assert!(config.get_validate());
+        assert!(config.get_validate_allow_trailing_bytes());
+        config.set_validate_allow_trailing_bytes(false);
+        assert!(!config.get_strict());
+        assert!(config.get_validate());
+        assert!(!config.get_validate_allow_trailing_bytes());
     }
 
     #[test]
@@ -1282,6 +1294,8 @@ mod tests {
                     let mut encoded = encode(value);
                     encoded.extend_from_slice(suffix);
                     for config in [
+                        AbiDecoderConfig::new().validate(true),
+                        AbiDecoderConfig::new().validate(true).validate_allow_trailing_bytes(true),
                         AbiDecoderConfig::new().validate_allow_trailing_bytes(true),
                         AbiDecoderConfig::new().strict(true).validate_allow_trailing_bytes(true),
                         AbiDecoderConfig::new().validate_allow_trailing_bytes(true).strict(true),
@@ -1309,7 +1323,7 @@ mod tests {
 
     #[test]
     fn validate_allow_trailing_bytes_keeps_other_checks() {
-        let config = AbiDecoderConfig::new().validate_allow_trailing_bytes(true);
+        let config = AbiDecoderConfig::new().strict(true).validate_allow_trailing_bytes(true);
         let value = bytes!("1122");
         let canonical = sol_data::Bytes::abi_encode(&value);
 
